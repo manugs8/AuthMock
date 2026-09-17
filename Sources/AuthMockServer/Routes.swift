@@ -26,7 +26,12 @@ struct StatusOverrideRequest: Content {
     let status: Int
 }
 
-func routes(_ app: Application, config: Config, statusOverride: StatusOverrideBox) throws {
+public func routes(
+    _ app: Application, 
+    config: Config, 
+    statusOverride: StatusOverrideBox,
+    claimsOverride: ClaimsOverrideBox
+) throws {
     app.get("health") { _ in "ok" }
 
     // Arma, una sola vez, el status que devolverá el próximo POST /token — ver
@@ -35,6 +40,14 @@ func routes(_ app: Application, config: Config, statusOverride: StatusOverrideBo
     app.post("_test", "status") { req async throws -> HTTPStatus in
         let body = try req.content.decode(StatusOverrideRequest.self)
         await statusOverride.arm(body.status)
+        return .ok
+    }
+
+    // Arma, una sola vez, los claims personalizados que devolverá el próximo POST /token —
+    // ver ClaimsOverrideBox.swift. Endpoint de test.
+    app.post("_test", "claims") { req async throws -> HTTPStatus in
+        let body = try req.content.decode(ClaimsOverride.self)
+        await claimsOverride.arm(body)
         return .ok
     }
 
@@ -53,9 +66,8 @@ func routes(_ app: Application, config: Config, statusOverride: StatusOverrideBo
 
     // El endpoint que "hace" algo: responde éxito con un token firmado, o ese mismo status
     // como fallo. Controlado por `config.status` por defecto, o por el próximo valor
-    // armado vía POST /_test/status (un solo uso — ver StatusOverrideBox.swift). Nada de
-    // simular el resto del protocolo OAuth (authorize, register...) — ver ADR 0009 de
-    // FinanceCore.
+    // armado vía POST /_test/status (un solo uso — ver StatusOverrideBox.swift).
+    // También firma con los claims por defecto o los overrideados.
     app.post("token") { req async throws -> Response in
         let status = await statusOverride.consume() ?? config.status
         guard (200..<300).contains(status) else {
@@ -65,7 +77,9 @@ func routes(_ app: Application, config: Config, statusOverride: StatusOverrideBo
             )
             return try await body.encodeResponse(status: HTTPResponseStatus(statusCode: status), for: req)
         }
-        let token = try await TokenSigner.sign(config: config)
+        
+        let customClaims = await claimsOverride.consume()
+        let token = try await TokenSigner.sign(config: config, claimsOverride: customClaims)
         let body = TokenResponse(accessToken: token, tokenType: "Bearer", expiresIn: config.expiresIn)
         return try await body.encodeResponse(status: HTTPResponseStatus(statusCode: status), for: req)
     }

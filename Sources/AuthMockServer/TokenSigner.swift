@@ -6,7 +6,7 @@ import JWTKit
 /// Deliberadamente genérico: sin ninguna forma de claims específica de un proveedor —
 /// solo lo mínimo (`iss`/`aud`/`sub`/`exp`) que cualquier verificador OAuth/OIDC estándar
 /// espera. No protege nada real: la clave privada está comiteada en este mismo repo.
-enum TokenSigner {
+public enum TokenSigner {
     static let keyID = "authmock-key-1"
 
     /// `internal`, no `private` — los tests decodifican contra este mismo tipo para
@@ -15,8 +15,9 @@ enum TokenSigner {
     struct Claims: JWTPayload, Equatable {
         let iss: IssuerClaim
         let aud: AudienceClaim
-        let sub: SubjectClaim
+        var sub: SubjectClaim
         let exp: ExpirationClaim
+        var permissions: [String]?
 
         func verify(using key: some JWTAlgorithm) throws {
             try exp.verifyNotExpired()
@@ -24,7 +25,7 @@ enum TokenSigner {
     }
 
     /// Un token firmado, válido desde ahora durante `config.expiresIn` segundos.
-    static func sign(config: Config) async throws -> String {
+    public static func sign(config: Config, claimsOverride: ClaimsOverride? = nil) async throws -> String {
         guard let url = Bundle.module.url(
             forResource: "test-private-key", withExtension: "pem", subdirectory: "Fixtures"
         ) else {
@@ -37,11 +38,15 @@ enum TokenSigner {
             rsa: Insecure.RSA.PrivateKey(pem: pem), digestAlgorithm: .sha256, kid: JWKIdentifier(string: keyID)
         )
 
+        let sub = claimsOverride?.sub ?? "authmock-user"
+        let permissions = claimsOverride?.permissions
+
         let claims = Claims(
             iss: IssuerClaim(value: config.issuer),
             aud: AudienceClaim(value: [config.audience]),
-            sub: SubjectClaim(value: "authmock-user"),
-            exp: ExpirationClaim(value: Date().addingTimeInterval(TimeInterval(config.expiresIn)))
+            sub: SubjectClaim(value: sub),
+            exp: ExpirationClaim(value: Date().addingTimeInterval(TimeInterval(config.expiresIn))),
+            permissions: permissions
         )
         return try await keys.sign(claims, kid: JWKIdentifier(string: keyID))
     }

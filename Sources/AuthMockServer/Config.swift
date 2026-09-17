@@ -12,14 +12,14 @@ import Foundation
 /// proceso, sin el riesgo de fuga entre tests que ya hay documentado en `FinanceCore`
 /// (variables de entorno mutadas por un test y nunca restauradas, corrompiendo los
 /// siguientes).
-struct Config: Sendable {
-    let port: Int
-    let status: Int
-    let issuer: String
-    let audience: String
-    let expiresIn: Int
+public struct Config: Sendable {
+    public let port: Int
+    public let status: Int
+    public let issuer: String
+    public let audience: String
+    public let expiresIn: Int
 
-    init(environment: [String: String] = ProcessInfo.processInfo.environment) {
+    public init(environment: [String: String] = ProcessInfo.processInfo.environment) {
         let port = environment["AUTHMOCK_PORT"].flatMap(Int.init) ?? 8090
         self.port = port
         self.status = environment["AUTHMOCK_STATUS"].flatMap(Int.init) ?? 200

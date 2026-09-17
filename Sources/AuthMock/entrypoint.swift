@@ -1,4 +1,5 @@
 import Vapor
+import AuthMockServer
 
 @main
 struct Entrypoint {
@@ -9,7 +10,12 @@ struct Entrypoint {
         app.http.server.configuration.port = config.port
 
         do {
-            try routes(app, config: config, statusOverride: StatusOverrideBox())
+            try routes(
+                app, 
+                config: config, 
+                statusOverride: StatusOverrideBox(),
+                claimsOverride: ClaimsOverrideBox()
+            )
             app.logger.notice(
                 "AuthMock on :\(config.port) — status=\(config.status) issuer=\(config.issuer) audience=\(config.audience)"
             )

@@ -5,14 +5,16 @@ import Foundation
 /// proceso, sin reiniciar `AuthMock` a mitad de un flujo. `Config.status` (ver `Config.swift`)
 /// sigue siendo el valor por defecto cuando no hay nada armado. Un `actor` porque Vapor
 /// puede despachar peticiones concurrentemente y armar/consumir debe ser atómico.
-actor StatusOverrideBox {
+public actor StatusOverrideBox {
     private var armed: Int?
 
-    func arm(_ status: Int) {
+    public init() {}
+
+    public func arm(_ status: Int) {
         armed = status
     }
 
-    func consume() -> Int? {
+    public func consume() -> Int? {
         defer { armed = nil }
         return armed
     }
