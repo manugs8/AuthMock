@@ -2,7 +2,7 @@ import Foundation
 import JWTKit
 import Testing
 
-@testable import AuthMock
+@testable import AuthMockServer
 
 @Suite("TokenSigner")
 struct TokenSignerTests {

@@ -1,47 +1,46 @@
 # Uso en una App iOS (Frontend)
 
-Cómo configurar en tu equipo local y en la suite de UI (XCUI) el uso de AuthMock para resolver el inicio de sesión.
+Cómo configurar en tu equipo local y en tus tests automatizados (UI o Unitarios) el uso de AuthMock para resolver el inicio de sesión falso.
 
 ## Resumen de la Aproximación
 
-Para una aplicación en Swift (iOS, macOS), no es deseable enlazar el código servidor de Vapor dentro de tu target Xcode. Esto incrementaría severamente los tiempos de compilación solo para proveer soporte E2E. En su lugar, el equipo frontend consume el mock como un proceso de terminal o de fondo.
+`AuthMock` puede integrarse de manera completamente nativa en tus **Tests de iOS** (gracias a que compila en iOS 16+) importando el módulo `AuthMockServer`. Esto evita tener que lanzar scripts externos o luchar contra "servidores huérfanos" (Zombies) al ejecutar tus tests automatizados.
 
-## Paso 1: Levantar el Ejecutable de terminal
+Para pruebas manuales en tu equipo, también puedes levantarlo desde tu terminal como un proceso independiente.
 
-Para poder realizar el login manual en tu Simulador iOS sin tocar el servidor de WorkOS real, asegúrate de levantar el servidor local en la terminal (fuera de Xcode):
+## Paso 1: Pruebas Automáticas Embedidas (XCTest / Swift Testing)
 
-```bash
-cd /ruta/a/tu/Package/AuthMock
-swift run AuthMock
-```
+En lugar de levantar un proceso externo en segundo plano, tu capa de tests puede levantar el Mock Server bajo demanda, para cada test o suite, de forma local al motor de testing. Esto es especialmente útil tanto para *Unit Tests* como para *XCUI Tests*.
 
-Por defecto, esto levanta el servidor web en el puerto `8090`. Tu framework de red en iOS debe apuntar a `http://127.0.0.1:8090` (asegúrate de autorizar dominios inseguros `NSExceptionAllowsInsecureHTTPLoads` en desarrollo si necesitas usar protocolo http puro).
-
-## Paso 2: Uso en Tests End-to-End Automáticos (XCUI)
-
-Cuando lanzas tests automáticos de UI con el servidor corriendo, puedes manipular el comportamiento de la instancia en memoria sin reiniciarla, gracias al endpoint de testing `/_test/status`.
+Añade `AuthMock` como dependencia en `Package.swift` o Xcode, **enlaza `AuthMockServer` únicamente en el target de tus Tests de iOS**, y arranca el entorno:
 
 ```swift
 import XCTest
+import AuthMockServer
 
 final class LoginUITests: XCTestCase {
+    var authMock: AuthMockTestApp!
     
-    override func setUpWithError() throws {
+    override func setUp() async throws {
+        try await super.setUp()
         continueAfterFailure = false
-        // Asumiendo que has definido tu XCUIApplication en algún lugar base
+        
+        // Arrancar silenciosamente en background en el hilo de test
+        authMock = try await AuthMockTestApp(port: 8090)
+        try await authMock.start()
+    }
+    
+    override func tearDown() async throws {
+        // Aseguramos que se libere el puerto para el próximo test
+        try await authMock.stop()
+        try await super.tearDown()
     }
     
     func test_cuandoElLoginFalla_MuestraAlertaError() async throws {
         let app = XCUIApplication()
-        app.launchEnvironment = ["USE_LOCAL_AUTH_MOCK": "YES"]
         
-        // 1. Alteras el mock para forzar un fallo al autenticar enviando http a /_test/status
-        let url = URL(string: "http://127.0.0.1:8090/_test/status")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(["status": 401])
-        try await URLSession.shared.data(for: request)
+        // 1. Alteras el mock por código Swift (sin peticiones HTTP manuales crudas)
+        await authMock.simule(status: 401)
         
         // 2. Ejecutar Acción en la App
         app.launch()
@@ -53,4 +52,15 @@ final class LoginUITests: XCTestCase {
 }
 ```
 
-Al utilizar este patrón pre-test, toda la red y el estado del Mock Server muta el *próximo* intento de `/token`, devolviendo en este caso el error 401 esperado, e interrumpiendo el flujo SSO y disparando la UI de Fallo de login en tu modelo.
+La app en ejecución en el Simulador compartirá el entorno de red de tu Mac, por lo que las peticiones a `http://127.0.0.1:8090` llegarán exitosamente al runner del Test.
+
+## Paso 2: Levantar el Ejecutable en terminal (Desarrollo Manual)
+
+Para poder realizar el login manual en tu Simulador iOS para experimentar (fuera de la suite de testing), asegúrate de levantar el servidor local en la terminal (fuera de Xcode):
+
+```bash
+cd /ruta/a/tu/Package/AuthMock
+swift run AuthMock
+```
+
+Por defecto, esto levanta el servidor web en el puerto `8090`. Recuerda que tu app debe estar configurada en desarrollo para apuntar al endpoint *issuer* o host a `http://127.0.0.1:8090`. (Y autorizar `NSExceptionAllowsInsecureHTTPLoads` o usar configuraciones locales si fuera necesario en iOS).

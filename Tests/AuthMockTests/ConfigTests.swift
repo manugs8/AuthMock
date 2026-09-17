@@ -1,6 +1,6 @@
 import Testing
 
-@testable import AuthMock
+@testable import AuthMockServer
 
 @Suite("Config")
 struct ConfigTests {

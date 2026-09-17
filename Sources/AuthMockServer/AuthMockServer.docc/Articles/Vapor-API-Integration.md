@@ -1,14 +1,14 @@
 # Uso en un Backend (Vapor)
 
-Instrucciones para enlazar, levantar y consumir el estado del mock internamente dentro de tus pruebas E2E.
+Instrucciones para enlazar, levantar y consumir el estado del mock internamente dentro de tus pruebas E2E en tests de API con Vapor.
 
 ## Resumen de la Aproximación
 
-A diferencia del mundo de UI donde el ejecutabe CLI corre externo a la app, un equipo de Backend puede exprimir un potencial inmenso incrustando la `.library` del mock directamente en sus tests. Esto significa que **comparte memoria** y no hace falta abrir puertos `TCP` complejos ni gestionar la finalización de subprocesos externos (los infames "orphan procesess").
+A diferencia del mundo de UI donde a veces los ejecutables corren externamente, al igual que en iOS, un equipo de Backend puede exprimir un potencial inmenso incrustando la `.library` del mock directamente en sus tests. Esto significa que configuramos el mock **usando exactamente la misma sintaxis** sin levantar procesos externos, e incluso podemos compartir memoria sin abrir puertos `TCP`.
 
 ## Paso 1: Configurar Dependencia SPM
 
-Asegúrate de importar el `AuthMock` como paquete e inclúyelo en tu target de `Tests`, consumiendo `.product(name: "AuthMockServer", ...)`:
+Asegúrate de importar `AuthMock` como paquete e inclúyelo en tu target de `Tests`, consumiendo `.product(name: "AuthMockServer", ...)`:
 
 ```swift
     // En tu Vapor App's Package.swift
@@ -22,15 +22,15 @@ Asegúrate de importar el `AuthMock` como paquete e inclúyelo en tu target de `
             dependencies: [
                 .target(name: "App"),
                 .product(name: "VaporTesting", package: "vapor"),
-                .product(name: "AuthMockServer", package: "AuthMock"), // <-- Importar la librería!
+                .product(name: "AuthMockServer", package: "AuthMock"), // <-- Importar la librería
             ]
         )
     ]
 ```
 
-## Paso 2: Ejecución Pre-Flight en un Test (XCTVapor)
+## Paso 2: Ejecución Puramente en Memoria (Recomendado para Backend)
 
-Cuando quieras poblar o inicializar tu servidor mock para probar cómo se porta la capa de SSO al comunicarse con WorkOS:
+Cuando quieras poblar o inicializar tu servidor mock para probar cómo se porta la capa de SSO de tu API, puedes usar `AuthMockTestApp`. Para máxima velocidad en entornos de Backend, puedes omitir la configuración de red al iniciar el mock (llamando a `startInMemory()` en vez de `start()`) y usar los conectores *in-memory* de `XCTVapor` directamente sobre la propiedad `app` subyacente.
 
 ```swift
 import Testing
@@ -42,43 +42,33 @@ import AuthMockServer
 @Suite("Test Funcional de API con Autenticación")
 struct AuthenticationTests {
     
-    @Test("El flujo debe retornar un 200 si el mock provee un token valido")
-    func testAppAutenticada() async throws {
-        // 1. Instanciar VaporApp en modo Testing
-        let app = try await Application.make(.testing)
-        defer { try? app.asyncShutdown() }
+    @Test("El flujo asimila 401 correctamente cuando el mock falla")
+    func testAppCredencialesInvalidas() async throws {
+        // --- 1. Levantar tu propia App de manera simulada ---
+        let miAPI = try await Application.make(.testing)
+        defer { try? miAPI.asyncShutdown() }
+        try configure(miAPI) // Setup de tus rutas
         
-        // --- 2. Levantar rutas de tu proyecto ---
-        try configure(app)
+        // --- 2. Levantar el Mock (Sin red, unificando sintaxis) ---
+        let authMock = try await AuthMockTestApp()
+        defer { try? await authMock.stop() }
         
-        // --- 3. Levantar la instancia Mock de WorkOS compartida ---
-        let mockWorkOS = try await Application.make(.testing)
-        defer { try? mockWorkOS.asyncShutdown() }
+        // Preparamos las rutas del mock in-memory
+        try await authMock.startInMemory()
         
-        // Prepara los actores que controlarán el fallo del Mock
-        let statusOverride = StatusOverrideBox()
-        let claimsOverride = ClaimsOverrideBox()
+        // --- 3. Fault Injection: Forzar que AuthMock falle ---
+        await authMock.simule(status: 401)
         
-        // Une el Request Cycle del mock a nuestra App 'de mentira'
-        try AuthMockServer.routes(
-            mockWorkOS,
-            config: Config(), 
-            statusOverride: statusOverride,
-            claimsOverride: claimsOverride
-        )
-        
-        // 4. Fault Injection - El primer login de prueba siempre devuelve OK
-        await statusOverride.arm(200)
-        
-        // 5. Testear usando memoria!
-        try await mockWorkOS.testing().test(.POST, "token") { res async in
-            #expect(res.status == .ok)
-            // Tu App original puede configurarse con clientes HTTP simulados o 
-            // apuntar programáticamente al cliente del Mock.
+        // --- 4. Testear usando memoria! ---
+        // (Nota: Si tu backend usa llamadas NSURLSession hacia afuera, entonces 
+        // deberías arrancar 'authMock.start()' y asignar tu backend para hablar 
+        // sobre localhost:8090 igual que en iOS).
+        try await authMock.app.testing().test(.POST, "token") { res async in
+            #expect(res.status == .unauthorized)
+            // Aquí puedes ver que AuthMock responde 401 tal y como configuramos
         }
     }
 }
 ```
 
-Usando los objetos de utilería del namespace de la librería (`StatusOverrideBox` y `ClaimsOverrideBox`), disponemos de un entorno 100% puro y concurrente que compila en cuestión de segundos, sin penalización por resolución de dependencias, reduciendo los tests inestables y "flaky".
-
+Usando un único helper estandarizado como `AuthMockTestApp`, las estrategias frontend y backend se unifican. Si necesitas invocar los endpoints de tu propia API y que estos deriven y enruten internamente contra AuthMock a través de red pura, puedes usar libremente `try await authMock.start()` asignarle un puerto en el constructor y consumir desde ahí sin problema.

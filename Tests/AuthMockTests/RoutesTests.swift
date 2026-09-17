@@ -3,7 +3,7 @@ import JWTKit
 import Testing
 import VaporTesting
 
-@testable import AuthMock
+@testable import AuthMockServer
 
 @Suite("Routes")
 struct RoutesTests {
