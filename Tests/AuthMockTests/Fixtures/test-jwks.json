@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "kty": "RSA",
+      "use": "sig",
+      "alg": "RS256",
+      "kid": "authmock-key-1",
+      "n": "3uCAEF1tRuRjDSxnntTZMbuzNXqH0sb2Xdj7GnP_wjcB4dY97dnYfiRMNCBJBPtPjdr-WHrB4wHSz3XntuMQ90_KxnQ9GmWbfm5BKIKUoyNNQL7jhIkjk2bacWTFXxOYeijM-AY38-QFUsAA5KsnjxDHlVaMV2PdARvdNwbirptP3XjI3ojHoPCjPKnZQPmGJt9mzRyfeGVSBf-3owwbUNFz9Yx7Z3bzwwz9ZsIJNK-8RDpD_Mhu4ASos66wVxqU0cBQCeTr0hHevY_7EnSBqK1IU8ykipoth6MbqocXrdwzY-ID6nZlzeS3MVRDeo4jFljy43zU4abXSOZPULTTnQ",
+      "e": "AQAB"
+    }
+  ]
+}
