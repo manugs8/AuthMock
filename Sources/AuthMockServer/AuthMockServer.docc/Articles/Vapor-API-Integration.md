@@ -46,18 +46,18 @@ struct AuthenticationTests {
     func testAppCredencialesInvalidas() async throws {
         // --- 1. Levantar tu propia App de manera simulada ---
         let miAPI = try await Application.make(.testing)
-        defer { try? miAPI.asyncShutdown() }
+        
         try configure(miAPI) // Setup de tus rutas
         
         // --- 2. Levantar el Mock (Sin red, unificando sintaxis) ---
         let authMock = try await AuthMockTestApp()
-        defer { try? await authMock.stop() }
+        
         
         // Preparamos las rutas del mock in-memory
         try await authMock.startInMemory()
         
         // --- 3. Fault Injection: Forzar que AuthMock falle ---
-        await authMock.simule(status: 401)
+        await authMock.simulate(status: 401)
         
         // --- 4. Testear usando memoria! ---
         // (Nota: Si tu backend usa llamadas NSURLSession hacia afuera, entonces 
@@ -67,6 +67,10 @@ struct AuthenticationTests {
             #expect(res.status == .unauthorized)
             // Aquí puedes ver que AuthMock responde 401 tal y como configuramos
         }
+        
+        // Limpieza de recursos
+        try await authMock.stop()
+        try await miAPI.asyncShutdown()
     }
 }
 ```

@@ -56,13 +56,13 @@ public class AuthMockTestApp {
     
     /// Prepara el mock para devolver el código de estado HTTP indicado 
     /// en la próxima llamada a `/token`. (Por ej. `401`).
-    public func simule(status: Int) async {
+    public func simulate(status: Int) async {
         await statusOverride.arm(status)
     }
     
     /// Prepara el mock para inyectar claims particulares en 
     /// el token la próxima vez que se consuma `/token`.
-    public func simule(claims: ClaimsOverride) async {
+    public func simulate(claims: ClaimsOverride) async {
         await claimsOverride.arm(claims)
     }
 }

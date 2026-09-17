@@ -10,7 +10,7 @@ de `FinanceCore` para el porqué.
 
 Deliberadamente simple: un único proceso nativo, sin Docker, sin túnel — HTTP plano en
 `localhost`. No hace falta que sea seguro ni completo: la clave privada de prueba está
-comiteada en este mismo repo (`Sources/AuthMock/Fixtures/test-private-key.pem`) y no
+comiteada en este mismo repo (`Sources/AuthMockServer/Fixtures/test-private-key.pem`) y no
 protege nada real. No simula `/oauth2/authorize` ni `/oauth2/register` — solo lo que hace
 falta para obtener y verificar un token.
 
@@ -87,7 +87,7 @@ No hace falta salvo que la actual se filtre o se quiera rotar por rutina — no 
 nada real, así que no hay urgencia:
 
 ```bash
-cd Sources/AuthMock/Fixtures
+cd Sources/AuthMockServer/Fixtures
 openssl genrsa -out test-private-key.pem 2048
 # recalcular test-jwks.json a partir de la nueva clave — ver el script equivalente en
 # FinanceCore/scripts/e2e-local.sh (sección "Generating a local-only test signing key")

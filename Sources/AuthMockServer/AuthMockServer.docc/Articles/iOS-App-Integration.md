@@ -39,8 +39,8 @@ final class LoginUITests: XCTestCase {
     func test_cuandoElLoginFalla_MuestraAlertaError() async throws {
         let app = XCUIApplication()
         
-        // 1. Alteras el mock por código Swift (sin peticiones HTTP manuales crudas)
-        await authMock.simule(status: 401)
+        // 1. Altera el mock por código Swift (sin peticiones HTTP manuales crudas)
+        await authMock.simulate(status: 401)
         
         // 2. Ejecutar Acción en la App
         app.launch()
