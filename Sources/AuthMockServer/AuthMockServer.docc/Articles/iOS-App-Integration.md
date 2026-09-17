@@ -25,13 +25,13 @@ final class LoginUITests: XCTestCase {
         try await super.setUp()
         continueAfterFailure = false
         
-        // Arrancar silenciosamente en background en el hilo de test
-        authMock = try await AuthMockTestApp(port: 8090)
+        // Al pasar `port: 0` le pedimos un puerto efímero (aleatorio) al OS,
+        // lo que permite correr UI Tests en paralelo sin colisiones.
+        authMock = try await AuthMockTestApp(port: 0)
         try await authMock.start()
     }
     
     override func tearDown() async throws {
-        // Aseguramos que se libere el puerto para el próximo test
         try await authMock.stop()
         try await super.tearDown()
     }
@@ -39,7 +39,10 @@ final class LoginUITests: XCTestCase {
     func test_cuandoElLoginFalla_MuestraAlertaError() async throws {
         let app = XCUIApplication()
         
-        // 1. Altera el mock por código Swift (sin peticiones HTTP manuales crudas)
+        // Inyectar el puerto aleatorio asignado para que la App lo lea en su URL Base
+        app.launchEnvironment["AUTHMOCK_PORT"] = String(authMock.listeningPort)
+        
+        // 1. Altera el mock por código Swift
         await authMock.simulate(status: 401)
         
         // 2. Ejecutar Acción en la App
@@ -51,6 +54,9 @@ final class LoginUITests: XCTestCase {
     }
 }
 ```
+
+> **Ejecución en Paralelo (xcodebuild paralell testing):**
+> Dado que cada test instancia `AuthMockTestApp(port: 0)`, cada clon del simulador en paralelo levantará su propio mock server aislado en un puerto distinto (ej: 50123 y 50124). De esta forma evitas los errores de red de _"port already in use"_ que ocurrirían si usaras un mismo puerto (como el `8090`), y evitas condiciones de carrera en tus mocks `simulate()`.
 
 La app en ejecución en el Simulador compartirá el entorno de red de tu Mac, por lo que las peticiones a `http://127.0.0.1:8090` llegarán exitosamente al runner del Test.
 
