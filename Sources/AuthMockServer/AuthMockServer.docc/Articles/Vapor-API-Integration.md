@@ -76,3 +76,27 @@ struct AuthenticationTests {
 ```
 
 Usando un único helper estandarizado como `AuthMockTestApp`, las estrategias frontend y backend se unifican. Si necesitas invocar los endpoints de tu propia API y que estos deriven y enruten internamente contra AuthMock a través de red pura, puedes usar libremente `try await authMock.start()` asignarle un puerto en el constructor y consumir desde ahí sin problema.
+
+## Sobreescribir `audience`/`expiresIn` para un test concreto
+
+Por defecto, `AuthMockTestApp` firma tokens exactamente como el ejecutable standalone sin
+variables de entorno: `aud: "authmock-audience"`, caducidad de 3600s. Dos casos habituales
+necesitan algo distinto, sin tener que reconstruir `routes(...)`/`Config` a mano:
+
+- Un backend cuyo verificador exige que el resource indicator sea una URL `https://`
+  absoluta (p. ej. `WorkOSBearerAuth`, que valida sus `WORKOS_RESOURCE_INDICATORS` así
+  "también bajo `.local`") — `"authmock-audience"` no vale ahí.
+- Un test que necesita un token genuinamente caducado en segundos, no en una hora.
+
+`init` acepta ambos como parámetros opcionales, junto al `port` que ya existía:
+
+```swift
+let authMock = try await AuthMockTestApp(
+    port: 0, audience: "https://e2e.invalid/mi-recurso", expiresIn: 5
+)
+try await authMock.start()
+// POST /token ahora firma con aud: ["https://e2e.invalid/mi-recurso"], expires_in: 5
+```
+
+`nil` (el valor por defecto de ambos) conserva el comportamiento de siempre — no hace
+falta tocar nada en un consumidor que no necesite esto.
