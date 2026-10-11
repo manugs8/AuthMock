@@ -9,9 +9,8 @@ import Foundation
 /// Deliberadamente un valor (`environment` inyectado, no leído dentro de cada propiedad)
 /// en vez de un `enum` con estáticas que llaman a `ProcessInfo.processInfo` directamente
 /// — así los tests construyen la configuración que quieran sin tocar el entorno real del
-/// proceso, sin el riesgo de fuga entre tests que ya hay documentado en `FinanceCore`
-/// (variables de entorno mutadas por un test y nunca restauradas, corrompiendo los
-/// siguientes).
+/// proceso, sin el riesgo de fuga entre tests (variables de entorno mutadas por un test y
+/// nunca restauradas, corrompiendo los siguientes).
 public struct Config: Sendable {
     public let port: Int
     public let status: Int

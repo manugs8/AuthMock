@@ -2,11 +2,9 @@
 
 Servidor OAuth falso, mínimo y genérico — no emula WorkOS ni ningún proveedor concreto,
 solo la interfaz de comunicación que cualquier app o API espera de un Authorization
-Server: un endpoint que da un token, y un JWKS para verificar su firma. Compartido entre
-[`FinanceCore`](../FinanceCore) y [`FinanceiOS`](../FinanceiOS) — ver
-[ADR 0009](../FinanceCore/FinanceCore-MDs/Documentation/ADRs/0009-authmock-shared-fake-oauth-server.md)
-y [ADR 0010](../FinanceCore/FinanceCore-MDs/Documentation/ADRs/0010-http-issuer-exception-for-loopback-in-test.md)
-de `FinanceCore` para el porqué.
+Server: un endpoint que da un token, y un JWKS para verificar su firma. Sirve para probar,
+sin credenciales reales, un servidor que verifique tokens (p. ej. con `WorkOSBearerAuth`) y
+las apps que los piden.
 
 Deliberadamente simple: un único proceso nativo, sin Docker, sin túnel — HTTP plano en
 `localhost`. No hace falta que sea seguro ni completo: la clave privada de prueba está
@@ -57,29 +55,27 @@ AUTHMOCK_STATUS=401 swift run AuthMock
   que un mismo test reproduzca "el primer intento de login falla, el segundo funciona" sin
   reiniciar el proceso a mitad de flujo. Endpoint de test, no forma parte de la interfaz
   OAuth que este servidor simula — no hace falta ningún flag para activarlo: a diferencia
-  de `FinanceCore`, `AuthMock` nunca se despliega a producción, así que no protege nada
+  de un servidor real, `AuthMock` nunca se despliega a producción, así que no protege nada
   que necesite estar detrás de una variable de entorno.
 
 ## Uso típico
 
-- **`FinanceCore`** apunta `WORKOS_ISSUER` a `http://127.0.0.1:<puerto>` (el issuer, no la
-  URL del JWKS — `WorkOSBearerAuth` descubre `oauth2/jwks` a partir de él) y
-  `WORKOS_RESOURCE_INDICATORS` a un valor `https://` que coincida con `AUTHMOCK_AUDIENCE`
-  (nunca se dereferencia por red, así que su scheme no tiene por qué coincidir con el del
-  issuer — ver ADR 0004), para que `BearerAuthMiddleware` verifique tokens reales emitidos
-  por este mock. Necesita `OAUTH_ALLOW_HTTP_LOOPBACK_ISSUER=true`, la excepción de issuer
-  `http://` en loopback de
-  [ADR 0010](../FinanceCore/FinanceCore-MDs/Documentation/ADRs/0010-http-issuer-exception-for-loopback-in-test.md).
-- **`FinanceiOS`**, en `.local`/`.ci`, llama a `POST /token` directamente vía
-  `AuthMockAPIClient` (no `AuthAPIClient`, que asume el contrato completo de WorkOS) y
-  guarda el token como si viniera de un login real — `MockWebAuthPresenter` fabrica el
-  `code` de callback sin abrir `ASWebAuthenticationSession`, y `AuthMockAPIClient` ignora
-  ese `code`/`codeVerifier` al llamar aquí, ya que este servidor tampoco los valida (ver
-  `Diseño CI - Estrategia de pruebas local.md` de `FinanceiOS`, §4).
+- **Un servidor que verifique tokens con `WorkOSBearerAuth`** usa
+  `.local(port:resourceIndicatorsRaw:)` apuntando al puerto de este mock: el issuer es siempre
+  `http://127.0.0.1:<puerto>` (`WorkOSBearerAuth` descubre `oauth2/jwks` a partir de él) y el
+  resource indicator debe ser un valor `https://` que coincida con `AUTHMOCK_AUDIENCE` (nunca se
+  dereferencia por red, así que su scheme no tiene por qué coincidir con el del issuer). Esa
+  configuración se rechaza en producción. Ver «Las tres configuraciones» en los docs de
+  `WorkOSBearerAuth`.
+- **Una suite de tests** puede arrancar el mock en el propio proceso con `AuthMockTestApp`
+  (producto `AuthMockServer`: `start()`, `stop()`, `simulate(status:)`, `simulate(claims:)`,
+  `listeningPort`) en vez de lanzar el ejecutable.
+- **Una app cliente**, en modo de pruebas, puede llamar a `POST /token` directamente en vez de
+  hacer el flujo OAuth completo y guardar el token como si viniera de un login real: este
+  servidor no valida ningún `code` ni `codeVerifier`.
 - **Postman, o cualquier cliente HTTP manual**: llama a `POST /token`, coge el
-  `access_token` de la respuesta, y lo usa como Bearer contra un `FinanceCore` local que
-  tenga `WORKOS_ISSUER` apuntando aquí — funciona ya, sin ningún cambio en ningún otro
-  repo.
+  `access_token` de la respuesta, y lo usa como Bearer contra un servidor local cuyo issuer
+  apunte aquí — funciona ya, sin ningún cambio en ningún otro repo.
 
 ## Regenerar la clave de prueba
 
@@ -89,6 +85,7 @@ nada real, así que no hay urgencia:
 ```bash
 cd Sources/AuthMockServer/Fixtures
 openssl genrsa -out test-private-key.pem 2048
-# recalcular test-jwks.json a partir de la nueva clave — ver el script equivalente en
-# FinanceCore/scripts/e2e-local.sh (sección "Generating a local-only test signing key")
+# recalcular test-jwks.json a partir de la nueva clave, con el mismo formato que el actual:
+# `n` = módulo RSA en base64url (`openssl rsa -in test-private-key.pem -noout -modulus`),
+# `e` = "AQAB", `kid` = "authmock-key-1"
 ```
